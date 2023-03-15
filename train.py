@@ -29,7 +29,6 @@ parser.add_argument("--dropout",type=float,default=0.2,help="probalility rate fo
 in_arg=parser.parse_args()
 in_arg=parser.parse_args()
 path=in_arg.data_dir
-new_path=in_arg.save_dir
 lr=in_arg.learning_rate
 structure=in_arg.arch
 dropout=in_arg.dropout
@@ -43,7 +42,7 @@ arch={"vgg16":25088,
       "alexnet":9216}
 
 def data_loader(path="./flowers"):
-    data_dir=path
+    data_dir="./flowers"
     train_dir=data_dir+"/train"
     valid_dir=data_dir+"/valid"
     test_dir=data_dir+"/test"
@@ -77,10 +76,10 @@ def data_loader(path="./flowers"):
   
     return trainloader,validloader,testloader,train_image_datasets
 
-trainloader,validloader,testloader,train_image_datasets=data_loader(path="./flowers")
+trainloader,validloader,testloader,train_image_datasets=data_loader(path)
      
 
-def network(structure="vgg16",dropout=0.2,lr=0.0003,device="gpu"):
+def network(structure="vgg16",dropout=0.2,lr=0.0003,device="gpu",hidden_layer=4096):
     if structure=="vgg16":
         model=models.vgg16(pretrained=True)
         hidden_layer=4096
@@ -99,20 +98,31 @@ def network(structure="vgg16",dropout=0.2,lr=0.0003,device="gpu"):
         param.requires_grad=False
         
         classifier=nn.Sequential(OrderedDict([
-                        ("fc1",nn.Linear(arch[structure],4096)),
-                        ("relu",nn.ReLU()),
-                        ("dropout",nn.Dropout(0.2)),
-                        ("fc2",nn.Linear(4096,102)),
-                        ("output",nn.LogSoftmax(dim=1))]))
+                           ("fc1",nn.Linear(arch[structure],hidden_layer)),
+                           ("relu",nn.ReLU()),
+                           ("dropout",nn.Dropout(dropout)),
+                           ("fc2",nn.Linear(hidden_layer,102)),
+                           ("output",nn.LogSoftmax(dim=1))]))        
         model.classifier=classifier
-        device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model.to(device)
+        if torch.cuda.is_available() and device=="gpu":
+            model.cuda()
         
         return model
 print(network())
-model=network(structure,dropout=0.2,lr=0.0003,device="gpu")
+model=network(structure,dropout=0.2,lr=lr,device="gpu")
 criterion=nn.NLLLoss()    
-optimizer=optim.Adam(model.classifier.parameters(),lr=3e-4)
+optimizer=optim.Adam(model.classifier.parameters(),lr=lr)
+
+def gpu(device):
+    if not device:
+        return torch.device("cpu")
+    device=torch.device("cuda:0" if torch.cuda is available() else"cpu")
+    if device=="cpu":
+        print("CUDA was not available using cpu")
+    return device
+
+gpu(device=in_arg.gpu)
+        
               
 def train_network(model=model, trainloader=trainloader, criterion=criterion, optimizer=optimizer, epochs=epochs, device="gpu"):
     optimizer=optim.Adam(model.classifier.parameters(),lr=3e-4)
@@ -155,17 +165,27 @@ def train_network(model=model, trainloader=trainloader, criterion=criterion, opt
                 model.train()
 
 train_network(model, trainloader, criterion, optimizer, epochs, device)
-def save_checkpoint(model,new_path="checkpoint.pth",structure="vgg16",hidden_layer=4096,lr=0.0003,epochs=3):
+trained_model=(model, trainloader, criterion, optimizer, epochs, device)
+def save_checkpoint(trained_model):
     model.class_to_idx=train_image_datasets.class_to_idx
-    torch.save({"structure":structure,
+    save_dir=""
+    checkpoint={"structure":structure,
                
                 "hidden_layer":hidden_layer,
-                "dropout":0.2,
+                "dropout":dropout,
                 "lr":lr,
-                "epochs":3,
-                "gpu":model.to(device),
+                "epochs":epochs,
+                "gpu":device,
                 "state_dict":model.state_dict(),
-                "class_to_idx":model.class_to_idx},
-                new_path)
+                "class_to_idx":model.class_to_idx}
+    if in_arg.save_dir:
+        save_dir=in_arg.save_dir
+    else:
+        save_dir="checkpoint.pth"
+    torch.save(checkpoint,save_dir)        
+                
+           
 print("model is trained")
+            
+save_checkpoint(trained_model)
     
