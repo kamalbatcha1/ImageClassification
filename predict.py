@@ -11,9 +11,6 @@ import json
 import PIL
 import argparse
 
-
-checkpoint="checkpoint.pth"
-
 parser=argparse.ArgumentParser()
 
 parser.add_argument("--json_file",type=str,default="cat_to_name.json",help="Allows user to enter custom JSON file ")
@@ -32,12 +29,12 @@ topK=in_arg.topk
 gpu=in_arg.gpu
  
 
-with open("cat_to_name.json","r") as f:
+with open(json_file,"r") as f:
     cat_to_name=json.load(f)
 
 # Write a function that loads a checkpoint and rebuilds the model
-def load_checkpoint(new_path="checkpoint.pth"):
-    checkpoint=torch.load("checkpoint.pth")
+def load_checkpoint(new_path="save_dir"):
+    checkpoint=torch.load("save_dir")
     structure=checkpoint["structure"]
     hidden_layer=checkpoint["hidden_layer"]
     epochs=checkpoint["epochs"]
@@ -68,15 +65,15 @@ def load_checkpoint(new_path="checkpoint.pth"):
         param.requires_grad=False
         
         classifier=nn.Sequential(OrderedDict([
-                        ("fc1",nn.Linear(arch[structure],4096)),
+                        ("fc1",nn.Linear(arch[structure],hidden_layer)),
                         ("relu",nn.ReLU()),
-                        ("dropout",nn.Dropout(0.2)),
-                        ("fc2",nn.Linear(4096,102)),
+                        ("dropout",nn.Dropout(dropout)),
+                        ("fc2",nn.Linear(hidden_layer,102)),
                         ("output",nn.LogSoftmax(dim=1))]))
         model.classifier=classifier
     model.load_state_dict(state_dict)
     return model
-loaded_checkpoint=load_checkpoint("checkpoint.pth")
+loaded_checkpoint=load_checkpoint("save_dir")
 print(loaded_checkpoint)
 
 
@@ -93,9 +90,16 @@ def process_image(image):
                                                        [0.229,0.224,0.225])])
     trans_image=transform(image)
     return trans_image
-
-device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def gpu(device):
+    if not device:
+        return torch.device("cpu")
+    device=torch.device("cuda:0" if torch.cuda is available() else"cpu")
+    if device=="cpu":
+        print("CUDA was not available using cpu")
+    return device
+gpu(device=in_arg.gpu)
 image_path="flowers/test/13/image_05775.jpg"
+
 def predict(image_path, model, topk=5):
     ''' Predict the class (or classes) of an image using a trained deep learning model.
     '''
@@ -104,13 +108,12 @@ def predict(image_path, model, topk=5):
     
     image=process_image(image_path)
     image=image.float().unsqueeze_(0)
-    model.to(device)
+    model.to("cuda")
     model.eval()
     with torch.no_grad():
         output=model.forward(image.cuda())
     prediction=torch.exp(output).data
-    return prediction.topk(topk)
-    
+    return prediction.topk(topk)  
 print("the prediction is")
 model=loaded_checkpoint
 probs, classes = predict(image_path, model)
